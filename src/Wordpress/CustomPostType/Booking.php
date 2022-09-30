@@ -270,13 +270,15 @@ class Booking extends Timeframe {
 			$itemId
 		);
 
+		// Validate booking -> check if there are no existing bookings in timerange.
 		$existingBookings =
-			\CommonsBooking\Repository\Booking::getExistingBookings(
-				$itemId,
+			\CommonsBooking\Repository\Booking::getByTimerange(
+				$startDate,
+				$endDate,
 				$locationId,
-				$repetitionStart,
-				$repetitionEnd,
-				$booking->ID ?? null,
+				$itemId,
+				[],
+				['confirmed']
 			);
 
 		// delete unconfirmed booking if booking process is canceled by user
@@ -288,7 +290,6 @@ class Booking extends Timeframe {
 			);
 		}
 
-		// Validate booking -> check if there are no existing bookings in timerange.
 		if ( count( $existingBookings ) > 0 ) {
 			// checks if it's an edit, but ignores exact start/end time
 			$isEdit = count( $existingBookings ) === 1 &&
