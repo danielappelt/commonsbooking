@@ -26,15 +26,14 @@ class Booking extends Timeframe {
 	 */
 	protected $menuPosition = 4;
 
-	public function __construct() {
+	/*public function __construct() {
 
         // does not trigger when initiated in initHooks
 		add_action( 'post_updated', array( $this, 'postUpdated' ), 1, 3 );
 
     	// Frontend request
 		$this->handleFormRequest();
-	}
-
+	}*/
 
     /**
 	 * Initiates needed hooks.
@@ -68,6 +67,9 @@ class Booking extends Timeframe {
 		// show admin notice
 		add_action( 'admin_notices', array( $this, 'displayBookingsAdminListNotice' ) );
         add_action( 'edit_form_top', array( $this, 'displayOverlappingBookingNotice' ), 99 );
+
+		add_action( 'admin_post_cb_booking_form', array( $this, 'handleFormRequest' ), 1, 3 );
+		add_action( 'post_updated', array( $this, 'postUpdated' ), 1, 3 );
 	}
 
     /**
@@ -156,12 +158,13 @@ class Booking extends Timeframe {
 	 * @throws Exception
 	 */
 	public function handleFormRequest() {
-
+error_log('handleFormRequest');
         if (
 			function_exists( 'wp_verify_nonce' ) &&
 			isset( $_REQUEST[ static::getWPNonceId() ] ) &&
 			wp_verify_nonce( $_REQUEST[ static::getWPNonceId() ], static::getWPAction() )
 		) {
+error_log('handleFormRequest AFTER check');
 			$itemId         = isset( $_REQUEST['item-id'] ) && $_REQUEST['item-id'] != '' ? sanitize_text_field( $_REQUEST['item-id'] ) : null;
 			$locationId     = isset( $_REQUEST['location-id'] ) && $_REQUEST['location-id'] != '' ? sanitize_text_field( $_REQUEST['location-id'] ) : null;
 			$comment        = isset( $_REQUEST['comment'] ) && $_REQUEST['comment'] != '' ? sanitize_text_field( $_REQUEST['comment'] ) : null;
@@ -194,34 +197,35 @@ class Booking extends Timeframe {
 				throw new Exception( 'Start- and/or enddate missing.' );
 			}
 
-            /** @var \CommonsBooking\Model\Booking $booking */
-			$booking = \CommonsBooking\Repository\Booking::getByDate(
-                $startDate,
-                $endDate,
-                $locationId,
-                $itemId
-            );
-
+error_log('Booking Form BEFORE Validate booking');
 			// Validate booking -> check if there are no existing bookings in timerange.
 			$existingBookings =
 				\CommonsBooking\Repository\Booking::getByTimerange(
 					$startDate,
 					$endDate,
 					$locationId,
-					$itemId,
-					[],
-					['confirmed']
+					$itemId
 				);
+
+error_log('Booking Form BEFORE getByDate');
+			// Try to retrieve current booking from existingBookings
+			$filteredBookings = array_filter($existingBookings, function($booking) use($startDate, $endDate) {
+				return $booking->getStartDate() == $startDate && $booking->getEndDate() == $endDate;
+			});
+
+			/** @var \CommonsBooking\Model\Booking $booking */
+			$booking = count($filteredBookings) > 0 ? $filteredBookings[0] : null;
 
 			if(count($existingBookings) > 0 ) {
 				$requestedPostname = array_key_exists('cb_booking', $_REQUEST) ? $_REQUEST['cb_booking'] : '';
-
+error_log('Booking Form EXISTING BOOKING');
 				// checks if it's an edit, but ignores exact start/end time
 				$isEdit = count($existingBookings) === 1 &&
 					array_values($existingBookings)[0]->getPost()->post_name === $requestedPostname &&
 					array_values($existingBookings)[0]->getPost()->post_author == get_current_user_id();
 
 				if( (!$isEdit || count($existingBookings) > 1) && $post_status != 'canceled' ) {
+                    // TODO
                     if ($booking) {
                         $post_status = 'unconfirmed';
                         set_transient( 'commonsbooking_overlappingBooking_' . $booking->ID, $booking->ID );
@@ -230,8 +234,6 @@ class Booking extends Timeframe {
                     }
 				}
 			}
-
-
 
             $postarr = array(
 				'type'        => sanitize_text_field( $_REQUEST['type'] ),
@@ -244,37 +246,38 @@ class Booking extends Timeframe {
 				],
             );
 
-            // New booking
-            if ( empty( $booking ) ) {
-                $postarr['post_name']  = Helper::generateRandomString();
-                $postarr['meta_input'] = [
+			if ( !$booking ) {
+				// New booking
+error_log('Booking Form BEFORE create');
+				$postarr['post_name']  = Helper::generateRandomString();
+				$postarr['meta_input'] = array_merge($postarr['meta-input'], [
 					\CommonsBooking\Model\Timeframe::META_LOCATION_ID => $locationId,
 					\CommonsBooking\Model\Timeframe::META_ITEM_ID => $itemId,
 					\CommonsBooking\Model\Timeframe::REPETITION_START => $startDate,
 					\CommonsBooking\Model\Timeframe::REPETITION_END => $endDate,
-					'type' => Timeframe::BOOKING_ID,
-                ];
+					'type'             => Timeframe::BOOKING_ID
+				]);
 
-                $postId = wp_insert_post( $postarr, true );
+				$postId                = wp_insert_post( $postarr, true );
+			} else {
+				// Existing booking
+error_log('Booking Form BEFORE update');
+				$postarr['ID'] = $booking->ID;
+				$postId        = wp_update_post( $postarr );
+			}
+error_log('Booking Form BEFORE save grid');
+			$this->saveGridSizes( $postId, $locationId, $itemId, $startDate, $endDate );
 
-                // Existing booking
-            } else {
-                $postarr['ID'] = $booking->ID;
-                $postId        = wp_update_post( $postarr );
-      
-            }
+			$bookingModel = new \CommonsBooking\Model\Booking( $postId );
+			// we need some meta-fields from bookable-timeframe, so we assign them here to the booking-timeframe
+error_log('Booking Form BEFORE assignBookableTimeframeFields');
+			$bookingModel->assignBookableTimeframeFields();
 
-            $this->saveGridSizes( $postId, $locationId, $itemId, $startDate, $endDate );
-
-            $bookingModel = new \CommonsBooking\Model\Booking( $postId );
-            // we need some meta-fields from bookable-timeframe, so we assign them here to the booking-timeframe
-            $bookingModel->assignBookableTimeframeFields();
-
-            // get slug as parameter
-            $post_slug = get_post( $postId )->post_name;
-
-            wp_redirect( add_query_arg( self::getPostType(), $post_slug, home_url() ) );
-            exit;
+			// get slug as parameter
+			$url = !!$booking ? $booking->bookingLinkUrl() : add_query_arg( self::getPostType(), $postarr['post_name'], home_url() ); //get_post( $postId )->post_name;
+error_log('Booking Form BEFORE redirect');
+			wp_redirect( $url );
+			exit;
 		}
 	}
 
