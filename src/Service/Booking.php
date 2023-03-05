@@ -52,7 +52,8 @@ class Booking {
 
 		// Add filter to get only bookings ending on day of enddate
 		$customArgs['meta_query'][] = array(
-			'key'     => \CommonsBooking\Model\Booking::REPETITION_START,
+			'key'     => \CommonsBooking\Model\Booking::REPETITION_END,
+			//'key'     => \CommonsBooking\Model\Booking::REPETITION_START,
 			'value'   => array( $startDate, $endDate ),
 			'compare' => 'BETWEEN',
 			'type'    => 'numeric'
@@ -60,8 +61,8 @@ class Booking {
 
 		// Get bookings starting on targeted startdate
 		$bookings = \CommonsBooking\Repository\Booking::getByTimerange(
-			$startDate,
-			strtotime( '2222-01-01' ),
+			0, //$startDate,
+			$startDate, //strtotime( '2222-01-01' ),
 			null,
 			null,
 			$customArgs,
