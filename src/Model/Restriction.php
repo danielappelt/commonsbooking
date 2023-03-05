@@ -239,6 +239,8 @@ class Restriction extends CustomPost {
 	 * Apply restriction workflow.
 	 */
 	public function apply() {
+		// TODO: Leihbar Hack
+		return;
 		// Check if this is an active restriction
 		if ( $this->isActive() ) {
 			$bookings = \CommonsBooking\Repository\Booking::getByRestriction( $this );
