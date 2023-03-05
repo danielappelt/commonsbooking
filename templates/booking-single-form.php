@@ -23,7 +23,8 @@ if ( isset( $form_post_status ) ) {
        <?php
         if ( $booking->ID ) {
         ?>
-     <form method="post" id="cb-booking-form-set-<?php echo esc_attr( $form_post_status ); ?>">
+     <form method="post" action="/wp-admin/admin-post.php" id="cb-booking-form-set-<?php echo esc_attr( $form_post_status ); ?>" onsubmit="jQuery(this).find('input[type=submit]').prop('disabled', true).attr('disabled', 'disabled');">
+		<input type="hidden" name="action" value="cb_booking_form"/>
      <?php
         wp_nonce_field(
 		    \CommonsBooking\Wordpress\CustomPostType\Booking::getWPAction(),
