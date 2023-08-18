@@ -219,7 +219,7 @@ error_log('handleFormRequest AFTER check');
 
 				// get slug as parameter
 				$post_slug = get_post( $postId )->post_name;
-
+error_log('Booking Form AFTER save ' . $postId);
 				wp_safe_redirect( add_query_arg( self::getPostType(), $post_slug, home_url() ) );
 			} catch ( BookingDeniedException $e ) {
 				set_transient(
@@ -284,16 +284,16 @@ error_log('Booking Form BEFORE Validate booking');
 		// Validate booking -> check if there are no existing bookings in timerange.
 		$existingBookings =
 			\CommonsBooking\Repository\Booking::getByTimerange(
-				$startDate,
-				$endDate,
+				$repetitionStart,
+				$repetitionEnd,
 				$locationId,
 				$itemId
 			);
 
 error_log('Booking Form BEFORE getByDate');
 		// Try to retrieve current booking from existingBookings
-		$filteredBookings = array_filter($existingBookings, function($booking) use($startDate, $endDate) {
-			return $booking->getStartDate() == $startDate && $booking->getEndDate() == $endDate;
+		$filteredBookings = array_filter($existingBookings, function($booking) use($repetitionStart, $repetitionEnd) {
+			return $booking->getStartDate() == $repetitionStart && $booking->getEndDate() == $repetitionEnd;
 		});
 
 		/** @var \CommonsBooking\Model\Booking $booking */
@@ -314,7 +314,9 @@ error_log('Booking Form BEFORE getByDate');
 						array_values( $existingBookings )[0]->getPost()->post_name === $requestedPostName &&
 						array_values( $existingBookings )[0]->getPost()->post_author === get_current_user_id();
 
-			if ( ( ! $isEdit || count( $existingBookings ) > 1 ) && $post_status !== 'canceled' ) {
+error_log('Booking Form existingBookings / isEdit ' . count($existingBookings) . ' / ' . $isEdit);
+			// TODO: isEdit calculation should be improved so that we can restore the original if clause
+			if ( count( $existingBookings ) > 1 && $post_status !== 'canceled' ) {
 				if ( $booking ) {
 					$post_status = 'unconfirmed';
 				} else {
@@ -339,11 +341,11 @@ error_log('Booking Form BEFORE getByDate');
 		$postarr['meta_input']            = array();
 		$postarr['meta_input']['comment'] = $comment;
 
-		if ( empty( $booking ) ) {
+		if ( !$booking ) {
 			// New booking
 error_log('Booking Form BEFORE create');
 			$postarr['post_name']  = Helper::generateRandomString();
-			$postarr['meta_input'] = array_merge($postarr['meta-input'], array(
+			$postarr['meta_input'] = array_merge($postarr['meta_input'], array(
 				\CommonsBooking\Model\Timeframe::META_LOCATION_ID => $locationId,
 				\CommonsBooking\Model\Timeframe::META_ITEM_ID     => $itemId,
 				\CommonsBooking\Model\Timeframe::REPETITION_START => $repetitionStart,
@@ -354,7 +356,7 @@ error_log('Booking Form BEFORE create');
 			$postId = wp_insert_post( $postarr, true );
 		} else {
 			// Existing booking
-error_log('Booking Form BEFORE update');
+error_log('Booking Form BEFORE update to ' . $post_status);
 			$postarr['ID'] = $booking->ID;
 			$postId        = wp_update_post( $postarr );
 		}
