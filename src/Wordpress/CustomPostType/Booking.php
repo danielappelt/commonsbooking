@@ -291,20 +291,13 @@ error_log('Booking Form BEFORE getByDate');
 			);
 		}
 
-		if ( count( $existingBookings ) > 0 ) {
+		if ( count( $existingBookings ) > 0 && $post_status !== 'canceled' ) {
 			// checks if it's an edit, but ignores exact start/end time
-			$isEdit = count( $existingBookings ) === 1 &&
-						array_values( $existingBookings )[0]->getPost()->post_name === $requestedPostName &&
-						array_values( $existingBookings )[0]->getPost()->post_author === get_current_user_id();
-
-error_log('Booking Form existingBookings / isEdit ' . count($existingBookings) . ' / ' . $isEdit);
-			// TODO: isEdit calculation should be improved so that we can restore the original if clause
-			if ( count( $existingBookings ) > 1 && $post_status !== 'canceled' ) {
-				if ( $booking ) {
-					$post_status = 'unconfirmed';
-				} else {
-					throw new BookingDeniedException( __( 'There is already a booking in this time-range. This notice may also appear if there is an unconfirmed booking in the requested period. Unconfirmed bookings are deleted after about 10 minutes. Please try again in a few minutes.', 'commonsbooking' ) );
-				}
+error_log('Booking Form existingBookings: ' . count($existingBookings));
+			if ( $booking && count( $existingBookings ) > 1 ) {
+				$post_status = 'unconfirmed';
+			} else {
+				throw new BookingDeniedException( __( 'There is already a booking in this time-range. This notice may also appear if there is an unconfirmed booking in the requested period. Unconfirmed bookings are deleted after about 10 minutes. Please try again in a few minutes.', 'commonsbooking' ) );
 			}
 		}
 
