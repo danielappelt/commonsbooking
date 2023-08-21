@@ -21,7 +21,7 @@ class BookingTest extends CustomPostTypeTest
 	 * These are the regular scenarios where nothing should go wrong.
 	 * @return void
 	 */
-	public function testHandleBookingRequestDefautl() {
+	public function testHandleBookingRequestDefault() {
 		// Case 1: We create an unconfirmed booking for a bookable timeframe. The unconfirmed booking should be created
 		$bookingId = Booking::handleBookingRequest(
 			$this->itemId,

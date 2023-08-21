@@ -297,7 +297,7 @@ error_log('Booking Form existingBookings: ' . count($existingBookings));
 error_log(print_r($existingBookings[0], true));
 			if ( $booking && count( $existingBookings ) > 1 ) {
 				$post_status = 'unconfirmed';
-			} else {
+			} else if (!$booking) {
 				throw new BookingDeniedException( __( 'There is already a booking in this time-range. This notice may also appear if there is an unconfirmed booking in the requested period. Unconfirmed bookings are deleted after about 10 minutes. Please try again in a few minutes.', 'commonsbooking' ) );
 			}
 		}
