@@ -294,6 +294,7 @@ error_log('Booking Form BEFORE getByDate');
 		if ( count( $existingBookings ) > 0 && $post_status !== 'canceled' ) {
 			// checks if it's an edit, but ignores exact start/end time
 error_log('Booking Form existingBookings: ' . count($existingBookings));
+error_log(print_r($existingBookings[0], true));
 			if ( $booking && count( $existingBookings ) > 1 ) {
 				$post_status = 'unconfirmed';
 			} else {
