@@ -135,13 +135,15 @@ class Booking extends Timeframe {
             $postarr['ID'] = $post_id;
 
             // unhook this function so it doesn't loop infinitely
-            remove_action( 'save_post_' . self::$postType, array( $this, 'saveAdminBookingFields' ) );
+            if( !remove_action( 'save_post_' . self::$postType, array( $this, 'saveAdminBookingFields' ), 10 ) ) {
+                error_log( 'Unable to remove action for save_post_' . self::$postType );
+	    };
 
             // update this post
             wp_update_post( $postarr, true, true );
 
             // readd the hook
-            add_action( 'save_post_' . self::$postType, array( $this, 'saveAdminBookingFields' ) );
+            add_action( 'save_post_' . self::$postType, array( $this, 'saveAdminBookingFields' ), 10 );
 
 			//if we just created a new confirmed booking we trigger the confirmation mail
 	        if ( $post_status == 'confirmed' ) {
