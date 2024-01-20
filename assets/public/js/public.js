@@ -1456,7 +1456,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         window.addEventListener("orientationchange", function(e) {
                             var i = function() {
                                 if (p.isMobile() && t.isShowning() && ("landscape" === p.getOrientation() ? (t.options.numberOfMonths = 2, 
-                                t.options.numberOfColumns = 2) : (t.options.numberOfMonths = 1, 
+                                t.options.numberOfColumns = 2) : (t.options.numberOfMonths = 2, 
                                 t.options.numberOfColumns = 1), t.render(), !t.options.inlineMode)) {
                                     var e = t.picker.getBoundingClientRect();
                                     t.picker.style.top = "calc(50% - " + e.height / 2 + "px)", 
