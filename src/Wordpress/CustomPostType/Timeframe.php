@@ -725,6 +725,7 @@ class Timeframe extends CustomPostType {
 	 * Save the new Custom Fields values
 	 */
 	public function savePost( $post_id, WP_Post $post ) {
+	  error_log('Timeframe savePost');
 		// This is just for timeframes
 		if ( $post->post_type !== static::getPostType() ) {
 			return;
@@ -739,6 +740,7 @@ class Timeframe extends CustomPostType {
 		}
 
 		// Validate timeframe
+          error_log('Timeframe before validateTimeFrame');
 		$isValid = $this->validateTimeFrame( $post_id, $post );
 
 		if ( $isValid ) {

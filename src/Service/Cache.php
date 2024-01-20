@@ -9,6 +9,7 @@ use Exception;
 use CMB2_Field;
 use Psr\Cache\InvalidArgumentException;
 use Symfony\Component\Cache\Adapter\FilesystemAdapter;
+use Symfony\Component\Cache\Adapter\NullAdapter;
 use Symfony\Component\Cache\Adapter\RedisAdapter;
 use Symfony\Component\Cache\Adapter\RedisTagAwareAdapter;
 use Symfony\Component\Cache\Adapter\TagAwareAdapter;
@@ -102,6 +103,7 @@ trait Cache {
 	 * @return TagAwareAdapterInterface
 	 */
 	public static function getCache( string $namespace = '', int $defaultLifetime = 0, string $directory = null ): TagAwareAdapterInterface {
+	  return new TagAwareAdapter( new NullAdapter() );
 		if ( $directory === null ){
 			$customCachePath = commonsbooking_sanitizeArrayorString( Settings::getOption( COMMONSBOOKING_PLUGIN_SLUG . '_options_advanced-options', 'cache_path' ) );
 			if ( $customCachePath ){
@@ -127,6 +129,7 @@ trait Cache {
 				set_transient( COMMONSBOOKING_PLUGIN_SLUG . '_adapter-error', $e->getMessage() );
 			}
 		}
+		//error_log('GET CACHE at ' . $directory);
 		$adapter = new TagAwareAdapter(
 			new FilesystemAdapter( $namespace, $defaultLifetime, $directory )
 		);
@@ -170,8 +173,9 @@ trait Cache {
 		$cacheItem->tag($tags);
 		$cacheItem->set( $value );
 		$cacheItem->expiresAfter(intval( $expiration ));
-
-		return $cache->save( $cacheItem );
+		$result = $cache->save( $cacheItem );
+		//error_log('SET CACHE with -> ' . $result);
+		return $result;
 	}
 
 	/**
@@ -182,6 +186,8 @@ trait Cache {
 	 * @throws InvalidArgumentException
 	 */
 	public static function clearCache( array $tags = [] ) {
+	  error_log('CLEAR CACHE');
+	  error_log( print_r($tags, true) );
 		if(!count($tags)) {
 			self::getCache()->clear();
 		} else {
