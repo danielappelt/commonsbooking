@@ -161,6 +161,37 @@ class Timeframe extends PostRepository {
 		}
 	}
 
+	public static function getByPostIds(
+		array $postIds = [],
+		?string $date = null,
+		bool $returnAsModel = false,
+		?int $minTimestamp = null,
+		array $postStatus = [ 'confirmed', 'unconfirmed', 'publish', 'inherit' ]
+	): array {
+	  $posts = [];
+
+	  if ( $postIds && count( $postIds ) ) {
+	    $posts = self::getPostsByBaseParams(
+						$date,
+						$minTimestamp,
+						null,
+						$postIds,
+						$postStatus
+						);
+	  }
+
+	  if ( $posts && count( $posts ) ) {
+	    $posts = self::filterTimeframes( $posts, $date );
+	  }
+
+	  // if returnAsModel == TRUE the result is a timeframe model instead of a wordpress object
+	  if ( $returnAsModel ) {
+	    self::castPostsToModels( $posts );
+	  }
+
+	  return $posts;
+	}
+
 	/**
 	 * Returns Post-IDs by type(s), item(s), location(s)
 	 * Why? It's because of performance. We use the ids as base set for following filter queries.
