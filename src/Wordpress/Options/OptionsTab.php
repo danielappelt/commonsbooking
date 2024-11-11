@@ -127,7 +127,8 @@ class OptionsTab {
 		if ( array_key_exists( 'action', $_REQUEST ) && $_REQUEST['action'] == "commonsbooking_options_export" ) {
 			// Check for export action
 			if ( array_key_exists( 'submit-cmb', $_REQUEST ) && $_REQUEST['submit-cmb'] == "download-export" ) {
-				TimeframeExport::exportCsv();
+				$exportPath = Settings::getOption( 'commonsbooking_options_export', 'export-filepath' );
+				TimeframeExport::exportCsv($exportPath);
 			} else {
 				if ( array_key_exists( 'export-filepath', $_REQUEST ) && $_REQUEST['export-filepath'] !== "" ) {
 

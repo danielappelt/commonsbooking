@@ -61,7 +61,8 @@ class TimeframeExport {
 			header( 'Content-Type: text/csv; charset=utf-8' );
 			header( 'Content-Disposition: attachment; filename=' . $exportFilename );
 		} else {
-			$timeframes = self::getExportData( true );
+			// $timeframes = self::getExportData( true );
+			$timeframes = self::getExportData();
 			$outputFile = $outputFile . $exportFilename;
 		}
 
