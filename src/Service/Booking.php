@@ -83,10 +83,9 @@ class Booking {
             return;
         }
 
-		// Yesterday at 23:59
-		$endDate = strtotime( 'midnight', time() ) - 1;
 		$message = new BookingReminderMessage( 0, 'post-booking-notice' );
-		self::sendMessagesForDay( $endDate, false, $message );
+		$daysBefore = Settings::getOption( 'commonsbooking_options_reminder', 'pre-booking-days-before' );
+		self::sendMessagesForDay( strtotime( '+' . $daysBefore . ' days midnight' ), false, $message );
 	}
 
 	public static function sendBookingStartLocationReminderMessage() {
