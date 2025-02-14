@@ -138,6 +138,27 @@ class Day {
 		return $this->timeframes;
 	}
 
+	public function setTimeframes( array $postIds ) {
+	  $timeFrames = \CommonsBooking\Repository\Timeframe::getByPostIds(
+									   $postIds,
+									   $this->getDate(),
+									   true,
+									   null,
+									   [ 'publish', 'confirmed' ]
+									   );
+
+	  // check if user is allowed to book this timeframe and remove unallowed timeframes from array
+	  // OR: Check for repetition timeframe selected days
+	  foreach ( $timeFrames as $key => $timeframe ) {
+	    if ( ! commonsbooking_isCurrentUserAllowedToBook( $timeframe->ID ) ||
+		 ! $this->isInTimeframe( $timeframe )) {
+	      unset( $timeFrames[ $key ] );
+	    }
+	  }
+
+	  $this->timeframes = $timeFrames;
+	}
+
 	/**
 	 * Returns array with restrictions.
 	 * @return array
@@ -560,12 +581,12 @@ class Day {
 			$this->mapRestrictions( $slots );
 			$this->sanitizeSlots( $slots );
 
-			Plugin::setCacheItem(
+/*			Plugin::setCacheItem(
 				$slots,
 				Wordpress::getTags($this->getTimeframes(), $this->items, $this->locations),
 				$customCacheKey
 			);
-
+*/
 			return $slots;
 		}
 	}

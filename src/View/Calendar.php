@@ -573,10 +573,14 @@ class Calendar {
 				$jsonResponse['countLockDaysMaxDays'] = (int) $countLockdaysMaximum;
 			}
 
+			// Prepare postIds for given items and locations to precalculate $day->timeframes
+			$postIds = \CommonsBooking\Repository\Timeframe::getPostIdsByType( [], $items, $locations );
+
 			/** @var Week $week */
 			foreach ( $calendar->getWeeks() as $week ) {
 				/** @var Day $day */
 				foreach ( $week->getDays() as $day ) {
+				        $day->setTimeframes( $postIds );
 					self::mapDay( $day, $lastBookableDate, $endDate, $jsonResponse, $firstBookableDay );
 				}
 			}
