@@ -186,12 +186,6 @@ class Booking extends PostRepository {
 		$query = new WP_Query( $args );
 		if ( $query->have_posts() ) {
 			$posts = $query->get_posts();
-			$posts = array_filter(
-				$posts,
-				function ( $post ) {
-					return in_array( $post->post_status, array( 'confirmed', 'unconfirmed' ) );
-				}
-			);
 
 			// If there is exactly one result, return it.
 			if ( count( $posts ) == 1 ) {
