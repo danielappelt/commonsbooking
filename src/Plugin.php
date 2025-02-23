@@ -753,7 +753,7 @@ class Plugin {
 		add_action( 'init', array( Scheduler::class, 'initHooks' ) , 40);
 
 		//handle the booking forms, needs to happen after taxonomy registration so that we can access the taxonomy
-		add_action('init', array(self::class, 'handleBookingForms'), 50);
+		//add_action('init', array(self::class, 'handleBookingForms'), 50);
 
 		// admin init tasks
 		add_action( 'admin_init', array( self::class, 'admin_init' ), 30 );

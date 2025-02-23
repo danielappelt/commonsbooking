@@ -35,14 +35,6 @@ class Booking extends Timeframe {
 	 */
 	protected $menuPosition = 4;
 
-	public function __construct() {
-
-		// does not trigger when initiated in initHooks
-		add_action( 'post_updated', array( $this, 'postUpdated' ), 1, 3 );
-
-	}
-
-
     /**
 	 * Initiates needed hooks.
 	 */
@@ -50,8 +42,15 @@ class Booking extends Timeframe {
 		// Add Meta Boxes
 		add_action( 'cmb2_admin_init', array( $this, 'registerMetabox' ) );
 
-        // we need to add some additional fields and modify the autor if admin booking is made
-        add_action( 'save_post_' . self::$postType, array( $this, 'savePost' ), 10 );
+		// TODO: replace pre_post_update, save_post_ and lots of checks in handleFormRequest
+		// with a single filter https://developer.wordpress.org/reference/hooks/wp_insert_post_data/
+		add_filter( 'wp_insert_post_data', array( $this, 'filterAdminBooking' ), 10, 4 );
+
+		// we need to add some additional fields and modify the autor if admin booking is made
+		add_action( 'save_post_' . self::$postType, array( $this, 'saveAdminBookingMeta' ), 10, 3 );
+
+		add_action( 'admin_post_cb_booking_form', array( $this, 'handleFormRequest' ), 1, 3 );
+		add_action( 'wp_after_insert_post', array( $this, 'postUpdated' ), 10, 4 );
 
 		// Set Tepmlates
 		add_filter( 'the_content', array( $this, 'getTemplate' ) );
@@ -72,6 +71,37 @@ class Booking extends Timeframe {
         add_action( 'edit_form_top', array( $this, 'displayOverlappingBookingNotice' ), 99 );
 	}
 
+    public function filterAdminBooking( $data, $postarr, $unsanitized_postarr, $update ) {
+        error_log('filterAdminBookingFields');
+
+        global $pagenow;
+
+        $is_trash_action = str_contains(($_REQUEST ?? array())['action'] ?? '', 'trash');
+
+        // we check if it's a new created post - TODO: This is not the case
+        if (
+			! empty( $_REQUEST ) &&
+			! $is_trash_action &&
+			$pagenow === 'post.php' &&
+			( commonsbooking_isCurrentUserAdmin() || commonsbooking_isCurrentUserCBManager() ) &&
+            $data['post_type'] === static::getPostType()
+		) {
+            $booking_user = isset( $_REQUEST['booking_user'] ) ? esc_html( $_REQUEST['booking_user'] ) : false;
+		    $post_status = esc_html( $_REQUEST['post_status'] ?? '' );
+
+		    $data['post_title'] = esc_html__( 'Admin-Booking', 'commonsbooking' );
+		    $data['post_author'] = $booking_user ?: $data['post_author'];
+		    $data['post_status'] = $post_status;
+
+            // set post_name if new post
+            if ( in_array( $data['post_status'], array( 'auto-draft', 'new' ) ) || $data['post_name'] === '' ) {
+                $data['post_name'] = Helper::generateRandomString();
+            }
+        }
+
+        return $data;
+    }
+
     /**
      * Adds and modifies some booking CPT fields in order to make admin boookings
      * compatible to user made bookings via frontend.
@@ -81,10 +111,11 @@ class Booking extends Timeframe {
      * @param  mixed $update
      * @return void
      */
-    public function savePost( $post_id, $post = null, $update = null ) {
+    public function saveAdminBookingMeta( $post_id, $post, $update ) {
+        error_log('saveAdminBookingMeta');
+
         global $pagenow;
 
-        $post = $post ?? get_post( $post_id );
         $is_trash_action = str_contains(($_REQUEST ?? array())['action'] ?? '', 'trash');
 
         // we check if it's a new created post - TODO: This is not the case
@@ -92,77 +123,21 @@ class Booking extends Timeframe {
 			! empty( $_REQUEST ) &&
 			! $is_trash_action &&
 			$pagenow === 'post.php' &&
-			( commonsbooking_isCurrentUserAdmin() || commonsbooking_isCurrentUserCBManager() )
+			( commonsbooking_isCurrentUserAdmin() || commonsbooking_isCurrentUserCBManager() ) &&
+			$post->post_title === esc_html__( 'Admin-Booking', 'commonsbooking' )
 		) {
-            // set request variables
-            $booking_user = isset( $_REQUEST['booking_user'] ) ? esc_html( $_REQUEST['booking_user'] ) : false;
-
-		    $post_status = esc_html( $_REQUEST['post_status'] ?? '' );
-
             $start_time = isset( $_REQUEST['repetition-start'] ) ? esc_html( $_REQUEST['repetition-start']['time'] ?? '' ) : false;
             $end_time = isset( $_REQUEST['repetition-end'] ) ? esc_html( $_REQUEST['repetition-end']['time'] ?? '' ) : false;
             $full_day = ( !$start_time || $start_time === '0:00' || $start_time === '00:00' ) && ( !$end_time || $end_time === '23:59' ) ? 'on' : '';
 
-            $postarr          = array(
-				'post_title'  => esc_html__( 'Admin-Booking', 'commonsbooking' ),
-                'post_author' => $booking_user,
-                'post_status' => $post_status,
-                'meta_input'  => [
-                    'admin_booking_id' => get_current_user_id(),
-                    'start-time'       => $start_time,
-                    'end-time'         => $end_time,
-                    'type'             => Timeframe::BOOKING_ID,
-                    'grid'             => '',
-                    'full-day'         => $full_day,
-				],
-            );
-
-            // set post_name if new post
-            if ( in_array( $post->post_status, array( 'auto-draft', 'new' ) ) || $post->post_name === '' ) {
-                $postarr['post_name'] = Helper::generateRandomString();
-            }
-
-            $postarr['ID'] = $post_id;
-
-            // unhook this function so it doesn't loop infinitely
-            remove_action( 'save_post_' . self::$postType, array( $this, 'savePost' ) );
-
-            // update this post
-            wp_update_post( $postarr, true, true );
-
-			//run validation only on new posts (the submit button is only available on new posts)
-	        if ( array_key_exists( self::SUBMIT_BUTTON_ID, $_REQUEST ) ) {
-		        try {
-			        $booking = new \CommonsBooking\Model\Booking( $post_id );
-			        $booking->isValid();
-			        wp_update_post( array(
-					        'ID'          => $post_id,
-					        'post_status' => 'confirmed'
-				        )
-			        );
-			        $post_status = 'confirmed';
-		        } catch ( TimeframeInvalidException $e ) {
-			        // set to draft and display error message
-			        wp_update_post( array(
-				        'ID'          => $post_id,
-				        'post_status' => 'draft',
-			        ) );
-			        set_transient(
-				        \CommonsBooking\Model\Booking::ERROR_TYPE,
-				        nl2br(commonsbooking_sanitizeHTML( $e->getMessage() )),
-				        30 //Expires very quickly, so that outdated messsages will not be shown to the user
-			        );
-		        }
-            }
-
-	        // readd the hook
-	        add_action( 'save_post_' . self::$postType, array( $this, 'savePost' ) );
-
-			//if we just created a new confirmed booking we trigger the confirmation mail
-	        if ( $post_status == 'confirmed' ) {
-		        $booking_msg = new BookingMessage( $post_id, $post_status );
-		        $booking_msg->triggerMail();
-	        }
+            error_log('saveAdminBookingMeta BEFORE update');
+            update_post_meta( $post_id, 'admin_booking_id', get_current_user_id() );
+            update_post_meta( $post_id, 'start-time', $start_time );
+            update_post_meta( $post_id, 'end-time', $end_time );
+            update_post_meta( $post_id, 'type', Timeframe::BOOKING_ID );
+            update_post_meta( $post_id, 'grid', '' );
+            update_post_meta( $post_id, 'full-day', $full_day );
+            error_log('saveAdminBookingMeta AFTER update');
         }
     }
 
@@ -172,11 +147,13 @@ class Booking extends Timeframe {
 	 * @throws BookingDeniedException - if booking is not allowed, contains translated error message for the user
 	 */
 	public static function handleFormRequest() {
+		error_log('handleFormRequest');
 		if (
 			function_exists( 'wp_verify_nonce' ) &&
 			isset( $_REQUEST[ static::getWPNonceId() ] ) &&
 			wp_verify_nonce( $_REQUEST[ static::getWPNonceId() ], static::getWPAction() ) // phpcs:ignore
 		) {
+			error_log('handleFormRequest AFTER check');
 			$itemId          = isset( $_REQUEST['item-id'] ) && $_REQUEST['item-id'] !== '' ? sanitize_text_field( wp_unslash( $_REQUEST['item-id'] ) ) : null;
 			$locationId      = isset( $_REQUEST['location-id'] ) && $_REQUEST['location-id'] !== '' ? sanitize_text_field( wp_unslash( $_REQUEST['location-id'] ) ) : null;
 			$comment         = isset( $_REQUEST['comment'] ) && $_REQUEST['comment'] !== '' ? sanitize_text_field( wp_unslash( $_REQUEST['comment'] ) ) : null;
@@ -188,27 +165,41 @@ class Booking extends Timeframe {
 			$postName        = isset( $_REQUEST['cb_booking'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['cb_booking'] ) ) : null;
 			$postType        = isset( $_REQUEST['type'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['type'] ) ) : null;
 
-			$postId = self::handleBookingRequest(
-				$itemId,
-				$locationId,
-				$post_status,
-				$post_ID,
-				$comment,
-				$repetitionStart,
-				$repetitionEnd,
-				$postName,
-				$postType,
-				$overbookedDays
-			);
+			try {
+				$postId = self::handleBookingRequest(
+					$itemId,
+					$locationId,
+					$post_status,
+					$post_ID,
+					$comment,
+					$repetitionStart,
+					$repetitionEnd,
+					$postName,
+					$postType,
+					$overbookedDays
+				);
 
-			// get slug as parameter
-			$post_slug = get_post( $postId )->post_name;
+				// get slug as parameter
+				$post_slug = get_post( $postId )->post_name;
 
-			wp_safe_redirect( add_query_arg( self::getPostType(), $post_slug, home_url() ) );
-			exit;
+				error_log('Booking Form AFTER save ' . $postId);
+				global $wpdb;
+				error_log( print_r($wpdb->queries, true) );
+
+				wp_safe_redirect( add_query_arg( self::getPostType(), $post_slug, home_url() ) );
+			} catch ( BookingDeniedException $e ) {
+				set_transient(
+					\CommonsBooking\Wordpress\CustomPostType\Booking::ERROR_TYPE . '-' . get_current_user_id(),
+					$e->getMessage(),
+					30 //Expires very quickly, so that outdated messsages will not be shown to the user
+				);
+				$targetUrl = $e->getRedirectUrl();
+				if ( $targetUrl ) {
+					header( 'Location: ' . $targetUrl );
+				}
+			}
 		}
 	}
-
 
 	/**
 	 *
@@ -271,22 +262,23 @@ class Booking extends Timeframe {
 			);
 		}
 
-		/** @var \CommonsBooking\Model\Booking $booking */
-		$booking = \CommonsBooking\Repository\Booking::getByDate(
-			$repetitionStart,
-			$repetitionEnd,
-			$locationId,
-			$itemId
-		);
-
+		error_log('Booking Form BEFORE Validate booking');
 		$existingBookings =
-			\CommonsBooking\Repository\Booking::getExistingBookings(
-				$itemId,
-				$locationId,
+			\CommonsBooking\Repository\Booking::getByTimerange(
 				$repetitionStart,
 				$repetitionEnd,
-				$booking->ID ?? null,
+				$locationId,
+				$itemId
 			);
+
+		error_log('Booking Form BEFORE getByDate');
+		// Try to retrieve current booking from existingBookings
+		$filteredBookings = array_filter($existingBookings, function($booking) use($repetitionStart, $repetitionEnd) {
+			return $booking->getStartDate() == $repetitionStart && $booking->getEndDate() == $repetitionEnd;
+		});
+
+		/** @var \CommonsBooking\Model\Booking $booking */
+		$booking = count($filteredBookings) > 0 ? reset($filteredBookings) : null;
 
 		// delete unconfirmed booking if booking process is canceled by user
 		if ( $post_status === 'delete_unconfirmed' && $booking->ID === $post_ID ) {
@@ -298,20 +290,20 @@ class Booking extends Timeframe {
 		}
 
 		// Validate booking -> check if there are no existing bookings in timerange.
-		if ( count( $existingBookings ) > 0 ) {
+		if ( count( $existingBookings ) > 0 && $post_status !== 'canceled' ) {
 			// checks if it's an edit, but ignores exact start/end time
-			$isEdit = count( $existingBookings ) === 1 &&
-						array_values( $existingBookings )[0]->getPost()->post_name === $requestedPostName &&
-						array_values( $existingBookings )[0]->getPost()->post_author === get_current_user_id();
-
-			if ( ( ! $isEdit || count( $existingBookings ) > 1 ) && $post_status !== 'canceled' ) {
-				if ( $booking ) {
-					$post_status = 'unconfirmed';
-				} else {
-					throw new BookingDeniedException( __( 'There is already a booking in this time-range. This notice may also appear if there is an unconfirmed booking in the requested period. Unconfirmed bookings are deleted after about 10 minutes. Please try again in a few minutes.', 'commonsbooking' ) );
-				}
+			error_log('Booking Form existingBookings: ' . count($existingBookings));
+			if ( $booking && count( $existingBookings ) > 1 ) {
+				$post_status = 'unconfirmed';
+			} else if (!$booking) {
+				error_log('Booking not found!');
+				$booking = reset( $existingBookings );
+				error_log( $booking->getStartDate() . ' / ' . $repetitionStart . ' .. ' . $booking->getEndDate() . ' / ' . $repetitionEnd );
+				throw new BookingDeniedException( __( 'There is already a booking in this time-range. This notice may also appear if there is an unconfirmed booking in the requested period. Unconfirmed bookings are deleted after about 10 minutes. Please try again in a few minutes.', 'commonsbooking' ) );
 			}
 		}
+
+		$postarr = array();
 
 		// add internal comment if admin edited booking via frontend TODO: This does not happen anymore, no admin bookings are made through the frontend
 		if ( $booking && $booking->post_author !== '' && intval( $booking->post_author ) !== intval( get_current_user_id() ) ) {
@@ -324,29 +316,37 @@ class Booking extends Timeframe {
 		$postarr['post_status']           = $post_status;
 		$postarr['post_type']             = self::getPostType();
 		$postarr['post_title']            = esc_html__( 'Booking', 'commonsbooking' );
+		$postarr['meta_input']            = array();
 		$postarr['meta_input']['comment'] = $comment;
 
-		// New booking
-		if ( empty( $booking ) ) {
+		if ( !$booking ) {
+			// New booking
+			error_log('Booking Form BEFORE create');
 			$postarr['post_name']  = Helper::generateRandomString();
-			$postarr['meta_input'] = array(
+			$postarr['meta_input'] = array_merge($postarr['meta_input'], array(
 				\CommonsBooking\Model\Timeframe::META_LOCATION_ID   => $locationId,
 				\CommonsBooking\Model\Timeframe::META_ITEM_ID       => $itemId,
 				\CommonsBooking\Model\Timeframe::REPETITION_START   => $repetitionStart,
 				\CommonsBooking\Model\Timeframe::REPETITION_END     => $repetitionEnd,
 				'type'                                              => Timeframe::BOOKING_ID,
-			);
+			));
 
 			$postId = wp_insert_post( $postarr, true );
 			$needsValidation = true;
-
-			// Existing booking
 		} else {
+			// Existing booking
+			error_log('Booking Form BEFORE update to ' . $post_status);
 			$postarr['ID'] = $booking->ID;
 			if ( $postarr['post_status'] === 'canceled' ) {
 				$postarr['meta_input']['cancellation_time'] = current_time('timestamp');
 			}
-			$postId        = wp_update_post( $postarr );
+			$postId        = wp_update_post( $postarr, true );
+
+			if ( $postId instanceof \WP_Error ) {
+				throw new BookingDeniedException( __( 'There was an error while saving the booking. Please try again. Resulting WP_ERROR: ', 'commonsbooking' ) .
+												  PHP_EOL . $postId->get_error_messages()
+				);
+			}
 
 			//we check if this is an already denied booking and demand validation again
 			if ($postarr["post_status"] == "unconfirmed"){
@@ -357,11 +357,13 @@ class Booking extends Timeframe {
 			}
 		}
 
+		error_log('Booking Form BEFORE save grid');
 		self::saveGridSizes( $postId, $locationId, $itemId, $repetitionStart, $repetitionEnd );
 
 		$bookingModel = new \CommonsBooking\Model\Booking( $postId );
 		// we need some meta-fields from bookable-timeframe, so we assign them here to the booking-timeframe
 		try {
+			error_log('Booking Form BEFORE assignBookableTimeframeFields');
 			$bookingModel->assignBookableTimeframeFields();
 			if ( $overbookedDays > 0 ) { //avoid setting the value when not present (for example when updating the booking)
 				$bookingModel->setOverbookedDays( $overbookedDays );
@@ -381,12 +383,6 @@ class Booking extends Timeframe {
 				wp_delete_post($bookingModel->ID);
 				throw new BookingDeniedException($e->getMessage());
 			}
-		}
-
-		if ( $postId instanceof \WP_Error ) {
-			throw new BookingDeniedException( __( 'There was an error while saving the booking. Please try again. Resulting WP_ERROR: ', 'commonsbooking' ) .
-											  PHP_EOL . $postId->get_error_messages()
-			);
 		}
 
 		return $postId;
@@ -482,28 +478,21 @@ class Booking extends Timeframe {
 	 * @param $post_after
 	 * @param $post_before
 	 */
-	public function postUpdated( $post_ID, $post_after, $post_before ) {
+	public function postUpdated( $post_ID, $post_after, $update, $post_before ) {
+		error_log('postUpdated: ' . $post_after->post_type . ' -> ' . $post_after->post_status );
 
-        if ( ! $this->hasRunBefore( __FUNCTION__ ) ) {
-			$isBooking = get_post_meta( $post_ID, 'type', true ) == Timeframe::BOOKING_ID;
-    		if ( $isBooking ) {
+		if ( $post_after->post_type !== self::getPostType() ) { //|| $this->hasRunBefore( __FUNCTION__ ) ) {
+			return;
+		}
 
-    				// Trigger Mail, only send mail if status has changed
-				if ( $post_before->post_status != $post_after->post_status and
-				     ! (
-					     $post_before->post_status === 'unconfirmed' and
-					     $post_after->post_status === 'canceled'
-				     )
-				) {
-					if ( $post_after->post_status == 'canceled' ) {
-						$booking = new \CommonsBooking\Model\Booking( $post_ID );
-						$booking->cancel();
-					} else {
-						$booking_msg = new BookingMessage( $post_ID, $post_after->post_status );
-						$booking_msg->triggerMail();
-					}
-				}
-            }
+		if ( $post_after->post_status === 'confirmed' ) {
+			// A confirmed booking was created or changed. Always send a booking email
+			$booking_msg = new BookingMessage( $post_ID, $post_after->post_status );
+			$booking_msg->triggerMail();
+		} else if ( $post_after->post_status === 'canceled' && $post_before->post_status !== 'canceled' && $post_before->post_status !== 'unconfirmed' ) {
+			// A booking was canceled..
+			$booking = new \CommonsBooking\Model\Booking( $post_ID );
+			$booking->cancel();
 		}
 	}
 
