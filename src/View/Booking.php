@@ -346,12 +346,14 @@ class Booking extends View {
 			$itemModel = new \CommonsBooking\Model\Item( $itemID );
 			$location  = $itemModel->getLocation();
 			if ( ! $location ) {
+				error_log('No location found for item ' . $itemID);
 				// This won't be displayed anywhere
 				wp_send_json_error(
 					array(
 						'message' => 'No location found for this item.',
 					)
 				);
+				return;
 			}
 			$timeframe = Timeframe::getBookable(
 				[ $location->ID ],
