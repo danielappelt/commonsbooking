@@ -314,6 +314,17 @@ class Booking extends View {
 			$location  = \CommonsBooking\Repository\Location::getByItem( $itemID, true );
 			// pick the first location, no matter what
 			$location  = reset( $location );
+			if( !$location ) {
+				// This won't be displayed anywhere
+				wp_send_json_error(
+					array(
+						'message' => 'No location found for this item.',
+					)
+				);
+
+				return;
+			}
+
 			$timeframe = Timeframe::getBookable(
 				[ $location->ID ],
 				[ $itemID ],
@@ -330,22 +341,14 @@ class Booking extends View {
 				)
 			);
 		}
-		if ( $location ) {
-			wp_send_json(
-				array(
-					'success'     => true,
-					'locationID'  => $location->ID,
-					'fullDay'     => $timeframe->isFullDay(),
-				)
-			);
-		} else {
-			// This won't be displayed anywhere
-			wp_send_json_error(
-				array(
-					'message' => 'No location found for this item.',
-				)
-			);
-		}
+
+		wp_send_json(
+			array(
+				'success'     => true,
+				'locationID'  => $location->ID,
+				'fullDay'     => $timeframe->isFullDay(),
+			)
+		);
 	}
 
 	/**
