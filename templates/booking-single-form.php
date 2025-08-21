@@ -45,7 +45,9 @@ if ( isset( $form_post_status ) ) {
 		<input type="hidden" name="post_status" value="<?php echo esc_attr( $form_post_status ); ?>"/>
 		<input type="hidden" name="repetition-start" value="<?php echo esc_attr( $booking->getMeta( 'repetition-start' ) ); ?>">
 		<input type="hidden" name="repetition-end" value="<?php echo esc_attr( $booking->getMeta( 'repetition-end' ) ); ?>">
+<?php if ( current_user_can('edit_cb_items') || time() < $booking->getStartDate() + 86400 ) {  /* in our case, start day uses 00:00; 1d = 86400s */ ?>
 		<input type="submit" value="<?php echo esc_attr( $button_label ); ?>" class="<?php echo 'cb-action-' . commonsbooking_sanitizeHTML( $form_post_status ); ?>"/>
+<?php } ?>
 		<?php if ( ! empty( $icalbutton_label ) ) { ?>
 			<input type="submit" name="calendar-download" value="<?php echo esc_attr( $icalbutton_label ); ?>" class="cb-action-get_ics"/>
 		<?php } ?>
